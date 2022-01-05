@@ -1,14 +1,14 @@
 export interface StarInfo {
-  fk5Num: number; // as int
-  bscNum: number; // as int
-  hipNum: number; // as int
-  ngcIcNum: number; // as int
-  flamsteed: number; // as byte
-  bayerRank: number; // as byte
-  subIndex: number; // as byte
-  constellation: number; // as byte
-  ngcIcClass: number; // as byte
-  messierNum: number; // as byte
+  fk5Num?: number; // as int
+  bscNum?: number; // as int
+  hipNum?: number; // as int
+  ngcIcNum?: number; // as int
+  flamsteed?: number; // as byte
+  bayerRank?: number; // as byte
+  subIndex?: number; // as byte
+  constellation?: number; // as byte
+  ngcIcClass?: number; // as byte
+  messierNum?: number; // as byte
   name: string;
   RA: number;
   DE: number;

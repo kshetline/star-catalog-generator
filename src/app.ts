@@ -19,6 +19,8 @@ const CROSS_INDEX_FILE = 'cache/FK5_SAO_HD_cross_index.txt';
 
 const YALE_BSC_URL = 'http://tdc-www.harvard.edu/catalogs/bsc5.dat.gz';
 const YALE_BSC_FILE = 'cache/yale_bsc.txt';
+const YALE_BSC_NOTES_URL = 'http://tdc-www.harvard.edu/catalogs/bsc5.notes.gz';
+const YALE_BSC_NOTES_FILE = 'cache/yale_bsc_notes.txt';
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -58,25 +60,26 @@ async function getPossiblyCachedFile(file: string, url: string, name: string): P
   return content;
 }
 
+const fk5Index: StarIndex = {};
+const hd2fk5: CrossIndex = {};
+// const bscIndex: StarIndex = {};
+// const hd2bsc: CrossIndex = {};
+let totalFK5 = 0;
+// let totalBSC = 0;
+// let totalHIP = 0;
+// let totalDSO = 0;
+// let fk5UpdatesFromHIP = 0;
+// let bscUpdatesFromHIP = 0;
+let highestFK5 = 0;
+// let highestBSC = 0; // Not a real BSC number, last of a series of values starting with highestFK5 + 1
+// let highestHIP = 0; // Not a real Hipparcos number, last of a series of values starting with highestBSC + 1
+let highestStar = 0;
+// let addedStars = 0;
+let pleiades: StarInfo;
+
 function processCrossIndex(contents: string): void {
   const lines = asLines(contents);
-  const fk5Index: StarIndex = {};
-  const hd2fk5: CrossIndex = {};
-  // const bscIndex: StarIndex = {};
-  // const hd2bsc: CrossIndex = {};
-  let totalFK5 = 0;
-  // let totalBSC = 0;
-  // let totalHIP = 0;
-  // let totalDSO = 0;
-  // let fk5UpdatesFromHIP = 0;
-  // let bscUpdatesFromHIP = 0;
-  let highestFK5 = 0;
-  // let highestBSC = 0; // Not a real BSC number, last of a series of values starting with highestFK5 + 1
-  // let highestHIP = 0; // Not a real Hipparcos number, last of a series of values starting with highestBSC + 1
-  let highestStar = 0;
-  // let addedStars = 0;
   let lineNo = 0;
-  let pleiades = null;
 
   for (const line of lines) {
     ++lineNo;
@@ -175,6 +178,75 @@ function processCrossIndex(contents: string): void {
   console.log('highestStar:', highestStar);
 }
 
+function processYaleBrightStarCatalog(contents: string): void {
+  const lines = asLines(contents);
+  let lineNo = 0;
+  const bsc2fk5: CrossIndex = {};
+  let dupes = 0;
+  let lastBSC = -1;
+  let currBSC: number;
+  let lastFK5 = -1;
+  let currFK5: number;
+  let lastName = '';
+  let currName: string;
+  let lastMag = 999.9;
+  let currMag: number;
+
+  for (const line of lines) {
+    ++lineNo;
+
+    if (line.trim().length === 0)
+      continue;
+
+    currBSC = toNumber(line.substring(0, 4));
+    bsc2fk5[currBSC] = 0; // Mark as not matched to an FK5 star, but not a duplicate either.
+    currName = line.substring(4, 14);
+
+    const fk5str = line.substring(37, 41).trim();
+
+    if (fk5str.length === 0)
+      currFK5 = 0;
+    else {
+      currFK5 = toNumber(fk5str);
+
+      if (currFK5 > highestFK5)
+        currFK5 = 0;
+    }
+
+    const vmagStr = line.substring(102, 107).trim();
+
+    if (vmagStr.length === 0)
+      continue;
+
+    currMag = toNumber(vmagStr);
+
+    if (currName === lastName && currName.trim().length > 0) {
+      lastFK5 = currFK5 = Math.max(lastFK5, currFK5);
+      bsc2fk5[lastBSC] = currFK5;
+      bsc2fk5[currBSC] = currFK5;
+      ++dupes;
+
+      if (currMag >= lastMag) {
+        delete bsc2fk5[currBSC];
+
+        continue;
+      }
+      else
+        delete bsc2fk5[lastBSC];
+    }
+
+    lastBSC = currBSC;
+    lastFK5 = currFK5;
+    lastName = currName;
+    lastMag = currMag;
+  }
+
+  console.log('First scan of Bright Star Catalog complete. Duplicates eliminated:', dupes);
+  console.log(lineNo);
+  Object.keys(bsc2fk5).forEach((key: any) => { if (bsc2fk5[key] === 0) delete bsc2fk5[key]; });
+  console.log(bsc2fk5);
+}
+
 (async (): Promise<void> => {
   try {
     await mkdir('cache', { recursive: true });
@@ -183,9 +255,11 @@ function processCrossIndex(contents: string): void {
 
     processCrossIndex(crossIndex);
 
-    const bscText = await getPossiblyCachedFile(YALE_BSC_FILE, YALE_BSC_URL, 'Yale Bright Star Catalog');
+    const bscCatalog = await getPossiblyCachedFile(YALE_BSC_FILE, YALE_BSC_URL, 'Yale Bright Star Catalog');
+    const bscNotes = await getPossiblyCachedFile(YALE_BSC_NOTES_FILE, YALE_BSC_NOTES_URL, 'Yale Bright Star Notes');
+    console.log(bscNotes);
 
-    console.log(bscText.length);
+    processYaleBrightStarCatalog(bscCatalog);
   }
   catch (err) {
     console.error(err);
