@@ -1,9 +1,9 @@
 import { ExtendedRequestOptions, requestText } from 'by-request';
 import { StatOptions, Stats } from 'fs';
-import { stat } from 'fs/promises';
-import { CrossIndex, StarIndex, StarInfo } from './types';
+import { readFile, stat } from 'fs/promises';
+import { CrossIndex, NGCMatchInfo, StarIndex, StarInfo } from './types';
 import { asLines, processMillis, toMixedCase, toNumber } from '@tubular/util';
-import { cos } from '@tubular/math';
+import { abs, cos } from '@tubular/math';
 
 const bayerRanks =
     'alp bet gam del eps zet eta the iot kap lam mu  nu  xi  omi pi  rho sig tau ups phi chi psi ome '
@@ -83,20 +83,28 @@ async function getPossiblyCachedFile(file: string, url: string, name: string,
   if (!stats)
     console.log(`Retrieving ${name}`);
 
-  const content = await requestText(url, opts);
+  let content: string;
 
-  clearInterval(autoTick);
+  try {
+    content = await requestText(url, opts);
 
-  if (tickShown)
-    process.stdout.write('\n');
+    clearInterval(autoTick);
 
-  const postStats = await safeStat(file);
+    if (tickShown)
+      process.stdout.write('\n');
 
-  if (stats) {
-    if (postStats.mtimeMs > stats.mtimeMs)
-      console.log(`Updating ${name}`);
-    else
-      console.log(`Using cached ${name}`);
+    const postStats = await safeStat(file);
+
+    if (stats) {
+      if (postStats.mtimeMs > stats.mtimeMs)
+        console.log(`Updating ${name}`);
+      else
+        console.log(`Using cached ${name}`);
+    }
+  }
+  catch (err) {
+    console.error(`Failed to acquire ${name}. Will used archived copy.`);
+    content = await readFile(file.replace(/^cache\//, 'archive/'), 'utf-8');
   }
 
   return content;
@@ -118,6 +126,7 @@ let highestHIP = 0; // Not a real Hipparcos number, last of a series of values s
 let highestStar = 0;
 let addedStars = 0;
 let pleiades: StarInfo;
+const ngcs: Record<number, NGCMatchInfo> = {};
 
 function processCrossIndex(contents: string): void {
   const lines = asLines(contents);
@@ -477,6 +486,70 @@ function processHipparcosStarCatalog(contents: string): void {
   console.log(lineNo, fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
 }
 
+function processNgcNames(contents: string): void {
+  const lines = asLines(contents);
+  let lineNo = 0;
+  let ngcIcNum: number;
+  let namedNSOs = 0;
+  let ngcIcStr: string;
+  let ngcInfo: NGCMatchInfo;
+  let messierNum: number;
+  let dividerCount = 0;
+
+  for (const line of lines) {
+    ++lineNo;
+
+    if (line.startsWith('-')) {
+      ++dividerCount;
+      continue;
+    }
+    else if (!line || dividerCount < 2)
+      continue;
+
+    const parts = line.split('|').map(s => s.trim());
+
+    ngcIcStr = parts[1];
+
+    if (!ngcIcStr)
+      continue;
+
+    ngcIcNum = toNumber(ngcIcStr.substring(2));
+
+    if (ngcIcStr.startsWith('I'))
+      ngcIcNum *= -1;
+
+    let name = parts[0];
+
+    if (name.startsWith('M ')) {
+      messierNum = toNumber(name.substring(2));
+      name = '';
+    }
+    else
+      messierNum = 0;
+
+    ngcInfo = ngcs[ngcIcNum];
+
+    if (!ngcInfo) {
+      ++namedNSOs;
+      ngcInfo = { ngcIcNum, messierNum, name };
+      ngcs[ngcIcNum] = ngcInfo;
+    }
+    else {
+      if (!ngcInfo.name)
+        ngcInfo.name = name;
+      else if (name.length > 0)
+        ngcInfo.name += '/' + name;
+
+      if (ngcInfo.messierNum !== 0 && messierNum !== 0)
+        console.log(`M${ngcInfo.messierNum} and M${messierNum} both refer to ${ngcIcNum < 0 ? 'IC' : 'NGC'}${abs(ngcIcNum)}`);
+      else if (messierNum !== 0)
+        ngcInfo.messierNum = messierNum;
+    }
+  }
+
+  console.log(lineNo, namedNSOs);
+}
+
 (async (): Promise<void> => {
   try {
     const crossIndex = await getPossiblyCachedFile(CROSS_INDEX_FILE, CROSS_INDEX_URL, 'FK5/SAO/HD cross index');
@@ -496,10 +569,12 @@ function processHipparcosStarCatalog(contents: string): void {
 
     const ngcNames = await getPossiblyCachedFile(NGC_NAMES_FILE, NGC_NAMES_URL, 'NGC 2000 Names',
       { maxCacheAge: THREE_MONTHS });
+
+    processNgcNames(ngcNames);
+
     const ngcData = await getPossiblyCachedFile(NGC_DATA_FILE, NGC_DATA_URL, 'NGC 2000 Data',
       { maxCacheAge: THREE_MONTHS });
 
-    console.log(ngcNames.substring(0, 1000));
     console.log(ngcData.substring(0, 1000));
   }
   catch (err) {
