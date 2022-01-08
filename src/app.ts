@@ -117,7 +117,7 @@ const hd2bsc: CrossIndex = {};
 let totalFK5 = 0;
 let totalBSC = 0;
 let totalHIP = 0;
-// let totalDSO = 0;
+let totalDSO = 0;
 let fk5UpdatesFromHIP = 0;
 let bscUpdatesFromHIP = 0;
 let highestFK5 = 0;
@@ -550,6 +550,82 @@ function processNgcNames(contents: string): void {
   console.log(lineNo, namedNSOs);
 }
 
+function processNgcData(contents: string): void {
+  const lines = asLines(contents);
+  let lineNo = 0;
+  let dividerCount = 0;
+  let ngcIcStr: string;
+  let ngcIcNum: number;
+  let ngcInfo: NGCMatchInfo;
+
+  for (const line of lines) {
+    ++lineNo;
+
+    if (line.startsWith('-')) {
+      ++dividerCount;
+      continue;
+    }
+    else if (!line || dividerCount < 2)
+      continue;
+
+    const parts = line.split('|');
+
+    const vmagStr = parts[7];
+    let vmag = 1000;
+
+    if (vmagStr.trim())
+      vmag = toNumber(vmagStr);
+
+    ngcIcStr = parts[0];
+    ngcIcNum = toNumber(ngcIcStr.substring(2));
+
+    if (ngcIcStr.startsWith('I'))
+      ngcIcNum *= -1;
+
+    ngcInfo = ngcs[ngcIcNum];
+
+    if (ngcInfo == null && vmag > 6.0)
+      continue;
+
+    const star = { fk5Num: 0, bscNum: 0, ngcIcNum, vmag } as StarInfo;
+
+    if (ngcInfo != null) {
+      star.messierNum = ngcInfo.messierNum;
+      star.name = ngcInfo.name;
+    }
+    else {
+      star.messierNum = 0;
+      star.name = null;
+    }
+
+    const raAndD = parts[2];
+    const ra_hours = toNumber(raAndD.substring(0, 2));
+    const ra_mins = toNumber(raAndD.substring(3, 7));
+
+    star.RA = ra_hours + ra_mins / 60.0;
+
+    const de_sign = (line.charAt(8) === '-' ? -1.0 : 1.0);
+    const de_degs = toNumber(raAndD.substring(9, 11));
+    const de_mins = toNumber(raAndD.substring(12, 14));
+
+    star.DE = (de_degs + de_mins / 60.0) * de_sign;
+
+    const constellationStr = parts[4].toLowerCase();
+    const constellation = constellationCodes.indexOf(constellationStr);
+
+    if (constellation >= 0)
+      star.constellation = constellation + 1;
+    else
+      star.constellation = 0;
+
+    ++totalDSO;
+    fk5Index[highestStar + totalDSO] = star;
+  }
+
+  console.log(lineNo);
+  console.log(JSON.stringify(fk5Index, null, 2));
+}
+
 (async (): Promise<void> => {
   try {
     const crossIndex = await getPossiblyCachedFile(CROSS_INDEX_FILE, CROSS_INDEX_URL, 'FK5/SAO/HD cross index');
@@ -575,7 +651,7 @@ function processNgcNames(contents: string): void {
     const ngcData = await getPossiblyCachedFile(NGC_DATA_FILE, NGC_DATA_URL, 'NGC 2000 Data',
       { maxCacheAge: THREE_MONTHS });
 
-    console.log(ngcData.substring(0, 1000));
+    processNgcData(ngcData);
   }
   catch (err) {
     console.error(err);
