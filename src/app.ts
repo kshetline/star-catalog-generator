@@ -1,10 +1,9 @@
 import { ExtendedRequestOptions, requestText } from 'by-request';
 import { StatOptions, Stats } from 'fs';
-import { mkdir, readFile, stat, writeFile } from 'fs/promises';
+import { stat } from 'fs/promises';
 import { CrossIndex, StarIndex, StarInfo } from './types';
 import { asLines, processMillis, toMixedCase, toNumber } from '@tubular/util';
 import { cos } from '@tubular/math';
-import * as https from 'https';
 
 const bayerRanks =
     'alp bet gam del eps zet eta the iot kap lam mu  nu  xi  omi pi  rho sig tau ups phi chi psi ome '
@@ -29,14 +28,19 @@ const THREE_MONTHS = 90 * 86400 * 1000;
 const HIPPARCOS_URL = 'https://heasarc.gsfc.nasa.gov/db-perl/W3Browse/w3query.pl';
 const HIPPARCOS_FILE = 'cache/hipparcos.txt';
 /* cspell:disable */ // noinspection SpellCheckingInspection
-const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=hip_number&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&bparam_vmag=%3C%3D12&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&bparam_vmag=%3C%3D7.5&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+
+const NGC_NAMES_URL = 'https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt.gz?VII/118/names.dat';
+const NGC_NAMES_FILE = 'cache/ngc_names.txt';
+const NGC_DATA_URL  = 'https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt.gz?VII/118/ngc2000.dat';
+const NGC_DATA_FILE  = 'cache/ngc_2000_data.txt';
 
 // Legacy inclusion from the original SVC short star catalog -- include them in output regardless of other criteria.
 const bscExtras = [8, 87, 340, 1643, 1751, 3732, 4030, 4067, 4531, 5223, 5473, 5714, 5888, 6970, 8076];
 
 // 6.0, 0.0 for small catalog
 const magLimitBSC = 12.0;
-// const magLimitHipparcos = 7.25;
+const magLimitHipparcos = 7.25;
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -49,85 +53,53 @@ async function safeStat(path: string, opts?: StatOptions & { bigint?: false }): 
   }
 }
 
-function toError(err: any): Error {
-  return Error ? err : new Error((err as any).toString());
-}
+async function getPossiblyCachedFile(file: string, url: string, name: string,
+                                     extraOpts?: ExtendedRequestOptions): Promise<string> {
+  let tickShown = false;
+  let lastTick = processMillis();
+  const autoTick = setInterval(() => {
+    const now = processMillis();
 
-async function getPossiblyCachedFile(file: string, url: string, name: string): Promise<string> {
+    if (now > lastTick + 500) {
+      tickShown = true;
+      process.stdout.write('◦');
+      lastTick = now;
+    }
+  }, 1500);
+  const opts: ExtendedRequestOptions = { autoDecompress: true, cachePath: file, progress: () => {
+    const now = processMillis();
+
+    if (now > lastTick + 500) {
+      tickShown = true;
+      process.stdout.write('•');
+      lastTick = now;
+    }
+  } };
   const stats = await safeStat(file);
-  const opts: ExtendedRequestOptions = { autoDecompress: true };
-  let content: string;
 
-  if (stats != null)
-    opts.headers = { 'if-modified-since': stats.mtime.toUTCString() };
-  else
+  if (extraOpts)
+    Object.assign(opts, extraOpts);
+
+  if (!stats)
     console.log(`Retrieving ${name}`);
 
-  try {
-    content = await requestText(url, opts);
-    console.log(`Updating ${name}`);
-    await writeFile(file, content);
-  }
-  catch (err) {
-    if (err.toString().match(/\b304\b/)) {
+  const content = await requestText(url, opts);
+
+  clearInterval(autoTick);
+
+  if (tickShown)
+    process.stdout.write('\n');
+
+  const postStats = await safeStat(file);
+
+  if (stats) {
+    if (postStats.mtimeMs > stats.mtimeMs)
+      console.log(`Updating ${name}`);
+    else
       console.log(`Using cached ${name}`);
-      content = (await readFile(file)).toString();
-    }
-    else // noinspection ExceptionCaughtLocallyJS
-      throw err;
   }
 
   return content;
-}
-
-async function getHipparcosData(): Promise<string> {
-  const stats = await safeStat(HIPPARCOS_FILE);
-  let isUpdate = false;
-
-  if (!stats)
-    console.log('Retrieving Hipparcos data');
-  else if (stats.mtimeMs > Date.now() - THREE_MONTHS) {
-    console.log('Using cached data');
-    return (await readFile(HIPPARCOS_FILE)).toString('ascii');
-  }
-  else
-    isUpdate = true;
-
-  return new Promise<string>((resolve, reject) => {
-    const req = https.request(HIPPARCOS_URL, { method: 'POST' }, res => {
-      let result = '';
-      let lastTick = processMillis();
-
-      res.setEncoding('ascii');
-
-      res.on('data', (data: Buffer) => {
-        if (processMillis() > lastTick + 2000) {
-          process.stdout.write('.');
-          lastTick = processMillis();
-        }
-
-        result += data.toString('ascii');
-      });
-
-      res.on('error', err => reject(toError(err)));
-
-      res.on('end', () => {
-        process.stdout.write('\n');
-
-        if (isUpdate)
-          console.log('Updating Hipparcos data');
-
-        writeFile(HIPPARCOS_FILE, result).then(() => resolve(result)).catch(err => reject(toError(err)));
-      });
-    });
-
-    req.write(HIPPARCOS_PARAMS, err => {
-      if (err)
-        reject(toError(err));
-      else
-        req.end();
-    });
-  });
 }
 
 const fk5Index: StarIndex = {};
@@ -136,13 +108,13 @@ const bscIndex: StarIndex = {};
 const hd2bsc: CrossIndex = {};
 let totalFK5 = 0;
 let totalBSC = 0;
-// let totalHIP = 0;
+let totalHIP = 0;
 // let totalDSO = 0;
-// let fk5UpdatesFromHIP = 0;
-// let bscUpdatesFromHIP = 0;
+let fk5UpdatesFromHIP = 0;
+let bscUpdatesFromHIP = 0;
 let highestFK5 = 0;
 let highestBSC = 0; // Not a real BSC number, last of a series of values starting with highestFK5 + 1
-// let highestHIP = 0; // Not a real Hipparcos number, last of a series of values starting with highestBSC + 1
+let highestHIP = 0; // Not a real Hipparcos number, last of a series of values starting with highestBSC + 1
 let highestStar = 0;
 let addedStars = 0;
 let pleiades: StarInfo;
@@ -433,11 +405,80 @@ function processYaleBrightStarCatalog(contents: string): void {
   console.log(!!bsc2fk5);
 }
 
+function processHipparcosStarCatalog(contents: string): void {
+  const lines = asLines(contents);
+  let lineNo = 0;
+
+  for (const line of lines) {
+    ++lineNo;
+
+    if (!/^\|[^a-z]/i.test(line.trim()))
+      continue;
+
+    const parts = line.split('|').map(s => s.trim());
+    const hipNum = toNumber(parts[3]);
+    const hdNum = toNumber(parts[7]);
+
+    if (hipNum === 0)
+      continue;
+
+    const raStr   = parts[5];
+    const deStr   = parts[6];
+    const vmagStr = parts[4];
+    const pmRAStr = parts[1];
+    const pmDEStr = parts[2];
+
+    if (!raStr || !deStr || !vmagStr || !pmRAStr || !pmDEStr)
+      continue;
+
+    const vmag = toNumber(vmagStr);
+    let fk5Num = 0;
+    let bscNum = 0;
+    let addStar = false;
+    let star: StarInfo;
+
+    if (hdNum > 0) {
+      fk5Num = toNumber(hd2fk5[hdNum]);
+      bscNum = toNumber(hd2bsc[hdNum]);
+    }
+
+    if (fk5Num > 0) {
+      star = fk5Index[fk5Num];
+      ++fk5UpdatesFromHIP;
+    }
+    else if (bscNum > 0) {
+      star = bscIndex[bscNum];
+      ++bscUpdatesFromHIP;
+    }
+    else if (vmag > magLimitHipparcos)
+      break;
+    else {
+      star = {} as StarInfo;
+      star.hipNum = hipNum;
+      addStar = true;
+    }
+
+    star.vmag = vmag;
+    star.RA   = toNumber(raStr) / 15.0;
+    star.DE   = toNumber(deStr);
+    star.pmRA = toNumber(pmRAStr) * 0.0066667 / cos(star.DE * Math.PI / 180.0);
+    star.pmDE = toNumber(pmDEStr) / 10.0;
+
+    if (addStar) {
+      ++addedStars;
+      fk5Num = highestFK5 + addedStars;
+      fk5Index[fk5Num] = star;
+      ++totalHIP;
+      highestHIP = fk5Num;
+      highestStar = fk5Num;
+    }
+  }
+
+  console.log(lineNo, fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
+}
+
 (async (): Promise<void> => {
   try {
-    console.log(await getHipparcosData());
-    await mkdir('cache', { recursive: true });
-
     const crossIndex = await getPossiblyCachedFile(CROSS_INDEX_FILE, CROSS_INDEX_URL, 'FK5/SAO/HD cross index');
 
     processCrossIndex(crossIndex);
@@ -447,6 +488,19 @@ function processYaleBrightStarCatalog(contents: string): void {
     console.log(bscNotes.length);
 
     processYaleBrightStarCatalog(bscCatalog);
+
+    const hipparcosData = await getPossiblyCachedFile(HIPPARCOS_FILE, HIPPARCOS_URL, 'Hipparcos data',
+      { maxCacheAge: THREE_MONTHS, params: HIPPARCOS_PARAMS, autoDecompress: false });
+
+    processHipparcosStarCatalog(hipparcosData);
+
+    const ngcNames = await getPossiblyCachedFile(NGC_NAMES_FILE, NGC_NAMES_URL, 'NGC 2000 Names',
+      { maxCacheAge: THREE_MONTHS });
+    const ngcData = await getPossiblyCachedFile(NGC_DATA_FILE, NGC_DATA_URL, 'NGC 2000 Data',
+      { maxCacheAge: THREE_MONTHS });
+
+    console.log(ngcNames.substring(0, 1000));
+    console.log(ngcData.substring(0, 1000));
   }
   catch (err) {
     console.error(err);
