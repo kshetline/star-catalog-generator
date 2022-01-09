@@ -7,7 +7,7 @@ import { abs, cos, floor, max, min } from '@tubular/math';
 import BinaryFile from 'binary-file';
 
 const bayerRanks =
-    'alp bet gam del eps zet eta the iot kap lam mu  nu  xi  omi pi  rho sig tau ups phi chi psi ome'
+    'alp bet gam del eps zet eta the iot kap lam mu nu xi omi pi rho sig tau ups phi chi psi ome'
       .split(/\s+/);
 const constellationCodes =
     ('and ant aps aql aqr ara ari aur boo cae cam cap car cas cen cep cet cha cir cma cmi cnc col com ' +
@@ -40,7 +40,7 @@ const NGC_DATA_FILE  = 'cache/ngc_2000_data.txt';
 const bscExtras = [8, 87, 340, 1643, 1751, 3732, 4030, 4067, 4531, 5223, 5473, 5714, 5888, 6970, 8076];
 
 const magLimitBSC = 6; // 12.0;
-const magLimitHipparcos = 6; // 7.25;
+const magLimitHipparcos = 5.5; // 7.25;
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -132,7 +132,7 @@ function processCrossIndex(contents: string): void {
   const lines = asLines(contents);
 
   for (const line of lines) {
-    if (line.trim().length === 0)
+    if (!line.trim())
       continue;
 
     const star = {} as StarInfo;
@@ -164,9 +164,9 @@ function processCrossIndex(contents: string): void {
         hd2fk5[hd] = star.fk5Num;
     }
 
-    const bayerFlamsteed = line.substring(93, 96).toLowerCase();
+    const bayerFlamsteed = line.substring(93, 96).trim().toLowerCase();
 
-    if (bayerFlamsteed.length > 0) {
+    if (bayerFlamsteed) {
       star.flamsteed = toNumber(bayerFlamsteed);
 
       if (star.flamsteed === 0) {
@@ -176,25 +176,25 @@ function processCrossIndex(contents: string): void {
           star.subIndex = toNumber(line.substring(96, 97));
       }
     }
+    else
+      star.flamsteed = 0;
 
     if (star.flamsteed !== 0 || star.bayerRank !== 0) {
-      const constellationStr = line.substring(98, 101).toLowerCase();
-
-      star.constellation = constellationCodes.indexOf(constellationStr) + 1;
+      star.constellation = constellationCodes.indexOf(line.substring(98, 102).trim().toLowerCase().replace('pet', 'peg')) + 1;
 
       if (star.constellation === 0)
         star.flamsteed = star.bayerRank = star.subIndex = 0;
     }
 
-    let name = line.substring(103);
+    let name = line.substring(103).trim();
 
-    if (name.length > 0) {
+    if (name) {
       const pos = name.indexOf(';');
 
       if (pos >= 0)
         name = name.substring(0, pos).trim();
 
-      if (name.length > 0 && !FK5_NAMES_TO_SKIP.test(name))
+      if (name && !FK5_NAMES_TO_SKIP.test(name))
         star.name = toMixedCase(name);
     }
 
@@ -214,11 +214,8 @@ function processCrossIndex(contents: string): void {
     }
   }
 
-  console.log(!!fk5Index);
-  console.log(!!hd2fk5);
   console.log('totalFK5:', totalFK5);
   console.log('highestStar:', highestStar);
-  console.log('pleiades:', pleiades);
   console.log('highestStar:', highestStar);
 }
 
@@ -236,32 +233,25 @@ function processYaleBrightStarCatalog(contents: string): void {
   let currMag: number;
 
   for (const line of lines) {
-    if (line.trim().length === 0)
+    if (!line.trim())
       continue;
 
     currBSC = toNumber(line.substring(0, 4));
     bsc2fk5[currBSC] = 0; // Mark as not matched to an FK5 star, but not a duplicate either.
     currName = line.substring(4, 14);
+    currFK5 = toNumber(line.substring(37, 41));
 
-    const fk5str = line.substring(37, 41).trim();
-
-    if (fk5str.length === 0)
+    if (currFK5 > highestFK5)
       currFK5 = 0;
-    else {
-      currFK5 = toNumber(fk5str);
-
-      if (currFK5 > highestFK5)
-        currFK5 = 0;
-    }
 
     const vmagStr = line.substring(102, 107).trim();
 
-    if (vmagStr.length === 0)
+    if (!vmagStr)
       continue;
 
     currMag = toNumber(vmagStr);
 
-    if (currName === lastName && currName.trim().length > 0) {
+    if (currName === lastName && currName.trim()) {
       lastFK5 = currFK5 = Math.max(lastFK5, currFK5);
       bsc2fk5[lastBSC] = currFK5;
       bsc2fk5[currBSC] = currFK5;
@@ -285,7 +275,7 @@ function processYaleBrightStarCatalog(contents: string): void {
   console.log('First scan of Bright Star Catalog complete. Duplicates eliminated:', dupes);
 
   for (const line of lines) {
-    if (line.trim().length === 0)
+    if (!line.trim())
       continue;
 
     const bscNum = toNumber(line.substring(0, 4));
@@ -296,7 +286,7 @@ function processYaleBrightStarCatalog(contents: string): void {
     const fk5str = line.substring(37, 41).trim();
     let fk5Num: number;
 
-    if (fk5str.length === 0)
+    if (!fk5str)
       fk5Num = bsc2fk5[bscNum];
     else {
       fk5Num = toNumber(fk5str);
@@ -307,12 +297,12 @@ function processYaleBrightStarCatalog(contents: string): void {
 
     const vmagStr = line.substring(102, 107).trim();
 
-    if (vmagStr.length === 0)
+    if (!vmagStr)
       continue;
 
     const vmag = toNumber(vmagStr);
     const name = line.substring(4, 14);
-    const bayerRankStr = name.substring(3, 6).toLowerCase();
+    const bayerRankStr = name.substring(3, 6).trim().toLowerCase();
     const bayerRank = bayerRanks.indexOf(bayerRankStr) + 1;
 
     if ((vmag <= magLimitBSC || bscExtras.includes(bscNum) || (bayerRank > 0 &&
@@ -399,7 +389,7 @@ function processHipparcosStarCatalog(contents: string): void {
     const hipNum = toNumber(parts[3]);
     const hdNum = toNumber(parts[7]);
 
-    if (hipNum === 0)
+    if (!hipNum)
       continue;
 
     const raStr   = parts[5];
@@ -454,6 +444,12 @@ function processHipparcosStarCatalog(contents: string): void {
     }
   }
 
+  if (pleiades) {
+    ++totalDSO;
+    fk5Index[highestStar + totalDSO] = pleiades;
+    console.log('Alcyone found, M45 Pleiades item added.');
+  }
+
   console.log(fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
 }
 
@@ -474,19 +470,16 @@ function processNgcNames(contents: string): void {
     else if (!line || dividerCount < 2)
       continue;
 
-    const parts = line.split('|').map(s => s.trim());
+    const parts = line.split('|');
 
     ngcIcStr = parts[1];
 
     if (!ngcIcStr)
       continue;
 
-    ngcIcNum = toNumber(ngcIcStr.substring(1));
+    ngcIcNum = toNumber(ngcIcStr.substring(1)) * (ngcIcStr.startsWith('I') ? -1 : 1);
 
-    if (ngcIcStr.startsWith('I'))
-      ngcIcNum *= -1;
-
-    let name = parts[0];
+    let name = parts[0].trim();
 
     if (name.startsWith('M ')) {
       messierNum = toNumber(name.substring(1));
@@ -508,9 +501,9 @@ function processNgcNames(contents: string): void {
       else if (name.length > 0)
         ngcInfo.name += '/' + name;
 
-      if (ngcInfo.messierNum !== 0 && messierNum !== 0)
+      if (ngcInfo.messierNum && messierNum)
         console.log(`M${ngcInfo.messierNum} and M${messierNum} both refer to ${ngcIcNum < 0 ? 'IC' : 'NGC'}${abs(ngcIcNum)}`);
-      else if (messierNum !== 0)
+      else if (messierNum)
         ngcInfo.messierNum = messierNum;
     }
   }
@@ -534,19 +527,10 @@ function processNgcData(contents: string): void {
       continue;
 
     const parts = line.split('|');
-
-    const vmagStr = parts[7];
-    let vmag = 1000;
-
-    if (vmagStr.trim())
-      vmag = toNumber(vmagStr);
+    const vmag = toNumber(parts[7], 1000);
 
     ngcIcStr = parts[0];
-    ngcIcNum = toNumber(ngcIcStr.substring(1));
-
-    if (ngcIcStr.startsWith('I'))
-      ngcIcNum *= -1;
-
+    ngcIcNum = toNumber(ngcIcStr.substring(1)) * (ngcIcStr.startsWith('I') ? -1 : 1);
     ngcInfo = ngcs[ngcIcNum];
 
     if (!ngcInfo && vmag > 6.0)
@@ -569,7 +553,7 @@ function processNgcData(contents: string): void {
 
     star.RA = ra_hours + ra_mins / 60.0;
 
-    const de_sign = (line.charAt(8) === '-' ? -1.0 : 1.0);
+    const de_sign = (raAndD.charAt(8) === '-' ? -1.0 : 1.0);
     const de_degs = toNumber(raAndD.substring(9, 11));
     const de_mins = toNumber(raAndD.substring(12, 14));
 
@@ -584,7 +568,7 @@ function processNgcData(contents: string): void {
   }
 }
 
-async function finalizeStarCatalog(doDoublePrecision = false): Promise<void> {
+async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
   await mkdir('output', { recursive: true });
 
   const file = new BinaryFile('output/stars.dat', 'w');
@@ -647,8 +631,8 @@ async function finalizeStarCatalog(doDoublePrecision = false): Promise<void> {
       await file.writeFloat(star.DE);
     }
 
-    await file.writeFloat(star.pmRA);
-    await file.writeFloat(star.pmDE);
+    await file.writeFloat(star.pmRA || 0);
+    await file.writeFloat(star.pmDE || 0);
     compressedMag = floor((star.vmag + 2.0) * 10.0 + 0.5);
     compressedMag = min(max(compressedMag, 0), 255);
     await file.writeUInt8(compressedMag);
@@ -706,7 +690,7 @@ async function finalizeStarCatalog(doDoublePrecision = false): Promise<void> {
 
     processNgcData(ngcData);
 
-    await finalizeStarCatalog();
+    await writeStarCatalog();
   }
   catch (err) {
     console.error(err);
