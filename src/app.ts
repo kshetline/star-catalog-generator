@@ -130,11 +130,8 @@ const ngcs: Record<number, NGCMatchInfo> = {};
 
 function processCrossIndex(contents: string): void {
   const lines = asLines(contents);
-  let lineNo = 0;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (line.trim().length === 0)
       continue;
 
@@ -224,14 +221,12 @@ function processCrossIndex(contents: string): void {
   console.log(!!hd2fk5);
   console.log('totalFK5:', totalFK5);
   console.log('highestStar:', highestStar);
-  console.log('lineNo:', lineNo);
   console.log('pleiades:', pleiades);
   console.log('highestStar:', highestStar);
 }
 
 function processYaleBrightStarCatalog(contents: string): void {
   const lines = asLines(contents);
-  let lineNo = 0;
   const bsc2fk5: CrossIndex = {};
   let dupes = 0;
   let lastBSC = -1;
@@ -244,8 +239,6 @@ function processYaleBrightStarCatalog(contents: string): void {
   let currMag: number;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (line.trim().length === 0)
       continue;
 
@@ -293,11 +286,8 @@ function processYaleBrightStarCatalog(contents: string): void {
   }
 
   console.log('First scan of Bright Star Catalog complete. Duplicates eliminated:', dupes);
-  lineNo = 0;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (line.trim().length === 0)
       continue;
 
@@ -409,18 +399,14 @@ function processYaleBrightStarCatalog(contents: string): void {
     }
   }
 
-  console.log(lineNo);
   Object.keys(bsc2fk5).forEach((key: any) => { if (bsc2fk5[key] === 0) delete bsc2fk5[key]; });
   console.log(!!bsc2fk5);
 }
 
 function processHipparcosStarCatalog(contents: string): void {
   const lines = asLines(contents);
-  let lineNo = 0;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (!/^\|[^a-z]/i.test(line.trim()))
       continue;
 
@@ -483,12 +469,11 @@ function processHipparcosStarCatalog(contents: string): void {
     }
   }
 
-  console.log(lineNo, fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
+  console.log(fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
 }
 
 function processNgcNames(contents: string): void {
   const lines = asLines(contents);
-  let lineNo = 0;
   let ngcIcNum: number;
   let namedNSOs = 0;
   let ngcIcStr: string;
@@ -497,8 +482,6 @@ function processNgcNames(contents: string): void {
   let dividerCount = 0;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (line.startsWith('-')) {
       ++dividerCount;
       continue;
@@ -547,20 +530,17 @@ function processNgcNames(contents: string): void {
     }
   }
 
-  console.log(lineNo, namedNSOs);
+  console.log(namedNSOs);
 }
 
 function processNgcData(contents: string): void {
   const lines = asLines(contents);
-  let lineNo = 0;
   let dividerCount = 0;
   let ngcIcStr: string;
   let ngcIcNum: number;
   let ngcInfo: NGCMatchInfo;
 
   for (const line of lines) {
-    ++lineNo;
-
     if (line.startsWith('-')) {
       ++dividerCount;
       continue;
@@ -622,7 +602,6 @@ function processNgcData(contents: string): void {
     fk5Index[highestStar + totalDSO] = star;
   }
 
-  console.log(lineNo);
   console.log(JSON.stringify(fk5Index, null, 2));
 }
 
