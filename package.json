@@ -20,10 +20,12 @@
     "@tubular/math": "^3.1.0",
     "@tubular/time": "^3.8.0",
     "@tubular/util": "^4.6.0",
+    "binary-file": "^0.2.3",
     "by-request": "^1.3.0",
     "json-z": "^3.3.2"
   },
   "devDependencies": {
+    "@types/binary-file": "^0.2.0",
     "@types/node": "^16.11.7",
     "@typescript-eslint/eslint-plugin": "^5.7.0",
     "@typescript-eslint/parser": "^5.7.0",

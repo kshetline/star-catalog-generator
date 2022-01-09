@@ -1,19 +1,20 @@
 import { ExtendedRequestOptions, requestText } from 'by-request';
 import { StatOptions, Stats } from 'fs';
-import { readFile, stat } from 'fs/promises';
+import { mkdir, readFile, stat } from 'fs/promises';
 import { CrossIndex, NGCMatchInfo, StarIndex, StarInfo } from './types';
 import { asLines, processMillis, toMixedCase, toNumber } from '@tubular/util';
-import { abs, cos } from '@tubular/math';
+import { abs, cos, floor, max, min } from '@tubular/math';
+import BinaryFile from 'binary-file';
 
 const bayerRanks =
-    'alp bet gam del eps zet eta the iot kap lam mu  nu  xi  omi pi  rho sig tau ups phi chi psi ome '
-      .split(/(?<=\w\w. )/).map(s => s.trim());
+    'alp bet gam del eps zet eta the iot kap lam mu  nu  xi  omi pi  rho sig tau ups phi chi psi ome'
+      .split(/\s+/);
 const constellationCodes =
     ('and ant aps aql aqr ara ari aur boo cae cam cap car cas cen cep cet cha cir cma cmi cnc col com ' +
      'cra crb crt cru crv cvn cyg del dor dra equ eri for gem gru her hor hya hyi ind lac leo lep lib ' +
      'lmi lup lyn lyr men mic mon mus nor oct oph ori pav peg per phe pic psa psc pup pyx ret scl sco ' +
-     'sct ser sex sge sgr tau tel tra tri tuc uma umi vel vir vol vul ')
-      .split(/(?<=\w\w\w )/).map(s => s.trim());
+     'sct ser sex sge sgr tau tel tra tri tuc uma umi vel vir vol vul')
+      .split(/\s+/);
 
 const CROSS_INDEX_URL = 'http://cdsarc.u-strasbg.fr/ftp/IV/22/index.dat.gz';
 const CROSS_INDEX_FILE = 'cache/FK5_SAO_HD_cross_index.txt';
@@ -28,7 +29,7 @@ const THREE_MONTHS = 90 * 86400 * 1000;
 const HIPPARCOS_URL = 'https://heasarc.gsfc.nasa.gov/db-perl/W3Browse/w3query.pl';
 const HIPPARCOS_FILE = 'cache/hipparcos.txt';
 /* cspell:disable */ // noinspection SpellCheckingInspection
-const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&bparam_vmag=%3C%3D7.5&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&bparam_vmag=%3C%3D8.3&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
 
 const NGC_NAMES_URL = 'https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt.gz?VII/118/names.dat';
 const NGC_NAMES_FILE = 'cache/ngc_names.txt';
@@ -38,9 +39,8 @@ const NGC_DATA_FILE  = 'cache/ngc_2000_data.txt';
 // Legacy inclusion from the original SVC short star catalog -- include them in output regardless of other criteria.
 const bscExtras = [8, 87, 340, 1643, 1751, 3732, 4030, 4067, 4531, 5223, 5473, 5714, 5888, 6970, 8076];
 
-// 6.0, 0.0 for small catalog
-const magLimitBSC = 12.0;
-const magLimitHipparcos = 7.25;
+const magLimitBSC = 6; // 12.0;
+const magLimitHipparcos = 6; // 7.25;
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -170,22 +170,19 @@ function processCrossIndex(contents: string): void {
       star.flamsteed = toNumber(bayerFlamsteed);
 
       if (star.flamsteed === 0) {
-        const bayerRank = bayerRanks.indexOf(bayerFlamsteed);
+        star.bayerRank = bayerRanks.indexOf(bayerFlamsteed) + 1;
 
-        if (bayerRank >= 0) {
-          star.bayerRank = bayerRank + 1;
+        if (star.bayerRank > 0)
           star.subIndex = toNumber(line.substring(96, 97));
-        }
       }
     }
 
     if (star.flamsteed !== 0 || star.bayerRank !== 0) {
       const constellationStr = line.substring(98, 101).toLowerCase();
-      const constellation = constellationCodes.indexOf(constellationStr);
 
-      if (constellation >= 0)
-        star.constellation = constellation + 1;
-      else
+      star.constellation = constellationCodes.indexOf(constellationStr) + 1;
+
+      if (star.constellation === 0)
         star.flamsteed = star.bayerRank = star.subIndex = 0;
     }
 
@@ -293,7 +290,7 @@ function processYaleBrightStarCatalog(contents: string): void {
 
     const bscNum = toNumber(line.substring(0, 4));
 
-    if (!bsc2fk5[bscNum] != null) // Skip past stars flagged as dupes.
+    if (bsc2fk5[bscNum] == null) // Skip past stars flagged as dupes.
       continue;
 
     const fk5str = line.substring(37, 41).trim();
@@ -316,16 +313,11 @@ function processYaleBrightStarCatalog(contents: string): void {
     const vmag = toNumber(vmagStr);
     const name = line.substring(4, 14);
     const bayerRankStr = name.substring(3, 6).toLowerCase();
-    let bayerRank = bayerRanks.indexOf(bayerRankStr);
-
-    if (bayerRank >= 0)
-      ++bayerRank;
-    else
-      bayerRank = 0;
+    const bayerRank = bayerRanks.indexOf(bayerRankStr) + 1;
 
     if ((vmag <= magLimitBSC || bscExtras.includes(bscNum) || (bayerRank > 0 &&
          ((bayerRank < 12 && vmag <= 5.5) || (bayerRank < 6 && vmag <= 6.0)))) &&
-        (fk5Num === 0 || fk5Num > highestFK5 || !!fk5Index[fk5Num])) {
+        (fk5Num === 0 || fk5Num > highestFK5 || !fk5Index[fk5Num])) {
       ++addedStars;
       fk5Num = highestFK5 + addedStars;
 
@@ -354,9 +346,7 @@ function processYaleBrightStarCatalog(contents: string): void {
       highestStar = fk5Num;
     }
 
-    console.log(totalBSC, highestBSC);
-
-    if (fk5Num > 0 && !!fk5Index[fk5Num]) {
+    if (fk5Num > 0 && fk5Index[fk5Num]) {
       const star = fk5Index[fk5Num];
 
       star.bscNum = bscNum;
@@ -368,7 +358,7 @@ function processYaleBrightStarCatalog(contents: string): void {
       if (hd > 0)
         hd2bsc[hd] = star.bscNum;
 
-      if (name.trim().length > 0) {
+      if (name.trim()) {
         let flamsteed: number;
         const flamsteedStr = name.substring(0, 3).trim();
 
@@ -384,12 +374,7 @@ function processYaleBrightStarCatalog(contents: string): void {
           subIndex = toNumber(subIndexStr);
 
         const constellationStr = name.substring(7, 10).toLowerCase();
-        let constellation = constellationCodes.indexOf(constellationStr);
-
-        if (constellation >= 0)
-          ++constellation;
-        else
-          constellation = 0;
+        const constellation = constellationCodes.indexOf(constellationStr) + 1;
 
         star.flamsteed = flamsteed;
         star.bayerRank = bayerRank;
@@ -400,7 +385,7 @@ function processYaleBrightStarCatalog(contents: string): void {
   }
 
   Object.keys(bsc2fk5).forEach((key: any) => { if (bsc2fk5[key] === 0) delete bsc2fk5[key]; });
-  console.log(!!bsc2fk5);
+  console.log(!!bsc2fk5, totalBSC);
 }
 
 function processHipparcosStarCatalog(contents: string): void {
@@ -496,7 +481,7 @@ function processNgcNames(contents: string): void {
     if (!ngcIcStr)
       continue;
 
-    ngcIcNum = toNumber(ngcIcStr.substring(2));
+    ngcIcNum = toNumber(ngcIcStr.substring(1));
 
     if (ngcIcStr.startsWith('I'))
       ngcIcNum *= -1;
@@ -504,7 +489,7 @@ function processNgcNames(contents: string): void {
     let name = parts[0];
 
     if (name.startsWith('M ')) {
-      messierNum = toNumber(name.substring(2));
+      messierNum = toNumber(name.substring(1));
       name = '';
     }
     else
@@ -557,19 +542,19 @@ function processNgcData(contents: string): void {
       vmag = toNumber(vmagStr);
 
     ngcIcStr = parts[0];
-    ngcIcNum = toNumber(ngcIcStr.substring(2));
+    ngcIcNum = toNumber(ngcIcStr.substring(1));
 
     if (ngcIcStr.startsWith('I'))
       ngcIcNum *= -1;
 
     ngcInfo = ngcs[ngcIcNum];
 
-    if (ngcInfo == null && vmag > 6.0)
+    if (!ngcInfo && vmag > 6.0)
       continue;
 
     const star = { fk5Num: 0, bscNum: 0, ngcIcNum, vmag } as StarInfo;
 
-    if (ngcInfo != null) {
+    if (ngcInfo) {
       star.messierNum = ngcInfo.messierNum;
       star.name = ngcInfo.name;
     }
@@ -591,18 +576,107 @@ function processNgcData(contents: string): void {
     star.DE = (de_degs + de_mins / 60.0) * de_sign;
 
     const constellationStr = parts[4].toLowerCase();
-    const constellation = constellationCodes.indexOf(constellationStr);
 
-    if (constellation >= 0)
-      star.constellation = constellation + 1;
-    else
-      star.constellation = 0;
+    star.constellation = constellationCodes.indexOf(constellationStr) + 1;
 
     ++totalDSO;
     fk5Index[highestStar + totalDSO] = star;
   }
+}
 
-  console.log(JSON.stringify(fk5Index, null, 2));
+async function finalizeStarCatalog(doDoublePrecision = false): Promise<void> {
+  await mkdir('output', { recursive: true });
+
+  const file = new BinaryFile('output/stars.dat', 'w');
+  let gapSize = 0;
+  let missingFK5 = 0;
+  let total = 0;
+  let bMag = 999.9;
+  let dMag = -999.9;
+  let compressedMag: number;
+
+  await file.open();
+
+  if (doDoublePrecision)
+    await file.writeUInt8(0xFD);
+
+  for (let i = 1; i <= highestStar + totalDSO; ++i) {
+    const star = fk5Index[i];
+
+    if (!star && i <= highestFK5) {
+      ++gapSize;
+
+      continue;
+    }
+    else if (gapSize > 0) {
+      missingFK5 += gapSize;
+
+      for (let j = 0; j < gapSize; ++j)
+        await file.writeUInt8(0xFF);
+
+      gapSize = 0;
+    }
+
+    if (i === highestFK5 + 1 || (highestBSC > 0 && i === highestBSC + 1) || i === highestStar + 1) {
+      // This marker byte tells the star catalog reader to advance one category in the types of objects
+      // it's reading -- first FK5 stars, then BSC stars, then Hipparcos stars, then DSOs.
+      await file.writeUInt8(0xFE);
+
+      // We can count on there being both FK5 and BSC stars, but if there aren't any supplemental
+      // Hipparcos stars, we need the star catalog reader to advance one more step.
+      if (i === highestStar + 1 && highestHIP === 0)
+        await file.writeUInt8(0xFE);
+    }
+
+    bMag = min(star.vmag, bMag);
+
+    if (star.vmag !== 1000.0)
+      dMag = max(star.vmag, dMag);
+
+    await file.writeUInt8(star.flamsteed);
+    await file.writeUInt8(star.bayerRank);
+    await file.writeUInt8(star.subIndex);
+    await file.writeUInt8(star.constellation);
+
+    if (doDoublePrecision) {
+      await file.writeDouble(star.RA);
+      await file.writeDouble(star.DE);
+    }
+    else {
+      await file.writeFloat(star.RA);
+      await file.writeFloat(star.DE);
+    }
+
+    await file.writeFloat(star.pmRA);
+    await file.writeFloat(star.pmDE);
+    compressedMag = floor((star.vmag + 2.0) * 10.0 + 0.5);
+    compressedMag = min(max(compressedMag, 0), 255);
+    await file.writeUInt8(compressedMag);
+
+    if (i > highestStar) {
+      await file.writeInt16(star.ngcIcNum);
+      await file.writeUInt8(star.messierNum);
+    }
+    else if (highestBSC > 0 && i > highestBSC) {
+      await file.writeUInt8(floor(star.hipNum / 0x10000));
+      await file.writeUInt16(star.hipNum & 0xFFFF);
+    }
+    else if (i > highestFK5)
+      await file.writeUInt16(star.bscNum);
+
+    if (!star.name)
+      await file.writeUInt8(0);
+    else {
+      const name = Buffer.from(star.name, 'utf8');
+      await file.writeUInt8(name.length);
+      await file.write(name);
+    }
+
+    ++total;
+  }
+
+  await file.close();
+  console.log('total:', total, missingFK5);
 }
 
 (async (): Promise<void> => {
@@ -631,6 +705,8 @@ function processNgcData(contents: string): void {
       { maxCacheAge: THREE_MONTHS });
 
     processNgcData(ngcData);
+
+    await finalizeStarCatalog();
   }
   catch (err) {
     console.error(err);
