@@ -28,8 +28,10 @@ const THREE_MONTHS = 90 * 86400 * 1000;
 
 const HIPPARCOS_URL = 'https://heasarc.gsfc.nasa.gov/db-perl/W3Browse/w3query.pl';
 const HIPPARCOS_FILE = 'cache/hipparcos.txt';
+const MAG_LIMIT_HIPPARCOS_QUERY = 7.0;
 /* cspell:disable */ // noinspection SpellCheckingInspection
-const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&bparam_vmag=%3C%3D8.3&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&' +
+  'bparam_vmag=%3C%3D' + MAG_LIMIT_HIPPARCOS_QUERY + '&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
 
 const NGC_NAMES_URL = 'https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt.gz?VII/118/names.dat';
 const NGC_NAMES_FILE = 'cache/ngc_names.txt';
@@ -39,8 +41,8 @@ const NGC_DATA_FILE  = 'cache/ngc_2000_data.txt';
 // Legacy inclusion from the original SVC short star catalog -- include them in output regardless of other criteria.
 const bscExtras = [8, 87, 340, 1643, 1751, 3732, 4030, 4067, 4531, 5223, 5473, 5714, 5888, 6970, 8076];
 
-const magLimitBSC = 6; // 12.0;
-const magLimitHipparcos = 5.5; // 7.25;
+const magLimitBSC = 6;
+const magLimitHipparcos = 6.5;
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -366,7 +368,7 @@ function processYaleBrightStarCatalogNotes(contents: string): void {
     if (!line.trim())
       continue;
 
-    const bscNum = toNumber(line.substring(1, 5));
+    const bscNum = toNumber(line.substring(0, 5));
 
     if (bsc2fk5[bscNum] === 0)
       continue;
@@ -384,7 +386,7 @@ function processYaleBrightStarCatalogNotes(contents: string): void {
     }
   }
 
-  console.log(`Full star names found: ${nameCount}`);
+  console.log('Full star names found:', nameCount);
 }
 
 function processHipparcosStarCatalog(contents: string): void {
@@ -437,7 +439,7 @@ function processHipparcosStarCatalog(contents: string): void {
       addStar = true;
     }
 
-    star.vmag = vmag;
+    star.vmag = min(vmag, star.vmag ?? vmag);
     star.RA   = toNumber(raStr) / 15.0;
     star.DE   = toNumber(deStr);
     star.pmRA = toNumber(pmRAStr) * 0.0066667 / cos(star.DE * Math.PI / 180.0);
@@ -486,6 +488,9 @@ function processNgcNames(contents: string): void {
 
     ngcIcNum = toNumber(ngcIcStr.substring(1)) * (ngcIcStr.startsWith('I') ? -1 : 1);
 
+    if (!ngcIcNum)
+      continue;
+
     let name = parts[0].trim();
 
     if (name.startsWith('M ')) {
@@ -515,7 +520,7 @@ function processNgcNames(contents: string): void {
     }
   }
 
-  console.log(`Named non-stellar objects to seek in ngc2000.dat: ${namedNSOs}`);
+  console.log('Named non-stellar objects to seek in ngc2000.dat:', namedNSOs);
 }
 
 function processNgcData(contents: string): void {
@@ -578,7 +583,8 @@ function processNgcData(contents: string): void {
 async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
   await mkdir('output', { recursive: true });
 
-  const file = new BinaryFile('output/stars.dat', 'w');
+  const path = 'output/stars.dat';
+  const file = new BinaryFile(path, 'w');
   let gapSize = 0;
   let compressedMag: number;
 
@@ -663,16 +669,17 @@ async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
   }
 
   await file.close();
+  console.log(`Output file size: ${((await safeStat(path)).size / 1024).toFixed(1)}K`);
 }
 
 function summary(): void {
-  console.log(`-- Total number of objects: ${total}`);
-  console.log(`FK5 stars: ${totalFK5} (updated from HIP: ${fk5UpdatesFromHIP}, highest: ${highestFK5}, missing: ${missingFK5})`);
-  console.log(`BSC stars: ${totalBSC} (updated from HIP: ${bscUpdatesFromHIP})`);
-  console.log(`HIP stars: ${totalHIP}`);
-  console.log(`DSOs     : ${totalDSO}`);
-  console.log(`Brightest magnitude: ${bMag}`);
-  console.log(`Dimmest magnitude  : ${dMag}`);
+  console.log('\n-- Total number of objects:', total);
+  console.log('FK5 stars:', totalFK5, 'updated from HIP:', fk5UpdatesFromHIP, 'highest:', highestFK5, 'missing:', missingFK5);
+  console.log('BSC stars:', totalBSC, 'updated from HIP:', bscUpdatesFromHIP);
+  console.log('HIP stars:', totalHIP);
+  console.log('DSOs     :', totalDSO);
+  console.log('Brightest magnitude:', bMag);
+  console.log('Dimmest magnitude  :', dMag);
 }
 
 (async (): Promise<void> => {
