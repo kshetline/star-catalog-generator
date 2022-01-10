@@ -125,6 +125,10 @@ let highestBSC = 0; // Not a real BSC number, last of a series of values startin
 let highestHIP = 0; // Not a real Hipparcos number, last of a series of values starting with highestBSC + 1
 let highestStar = 0;
 let addedStars = 0;
+let total = 0;
+let missingFK5 = 0;
+let bMag = 999.9;
+let dMag = -999.9;
 let pleiades: StarInfo;
 const ngcs: Record<number, NGCMatchInfo> = {};
 
@@ -213,10 +217,6 @@ function processCrossIndex(contents: string): void {
       };
     }
   }
-
-  console.log('totalFK5:', totalFK5);
-  console.log('highestStar:', highestStar);
-  console.log('highestStar:', highestStar);
 }
 
 function processYaleBrightStarCatalog(contents: string): void {
@@ -349,33 +349,13 @@ function processYaleBrightStarCatalog(contents: string): void {
         hd2bsc[hd] = star.bscNum;
 
       if (name.trim()) {
-        let flamsteed: number;
-        const flamsteedStr = name.substring(0, 3).trim();
-
-        if (flamsteedStr.length === 0)
-          flamsteed = 0;
-        else
-          flamsteed = toNumber(flamsteedStr);
-
-        const subIndexStr = name.substring(6, 7);
-        let subIndex = 0;
-
-        if (subIndexStr !== ' ')
-          subIndex = toNumber(subIndexStr);
-
-        const constellationStr = name.substring(7, 10).toLowerCase();
-        const constellation = constellationCodes.indexOf(constellationStr) + 1;
-
-        star.flamsteed = flamsteed;
+        star.flamsteed = toNumber(name.substring(0, 3).trim());
         star.bayerRank = bayerRank;
-        star.subIndex = subIndex;
-        star.constellation = constellation;
+        star.subIndex = toNumber(name.substring(6, 7));
+        star.constellation = constellationCodes.indexOf(name.substring(7, 10).toLowerCase()) + 1;
       }
     }
   }
-
-  Object.keys(bsc2fk5).forEach((key: any) => { if (bsc2fk5[key] === 0) delete bsc2fk5[key]; });
-  console.log(!!bsc2fk5, totalBSC);
 }
 
 function processHipparcosStarCatalog(contents: string): void {
@@ -449,8 +429,6 @@ function processHipparcosStarCatalog(contents: string): void {
     fk5Index[highestStar + totalDSO] = pleiades;
     console.log('Alcyone found, M45 Pleiades item added.');
   }
-
-  console.log(fk5UpdatesFromHIP, bscUpdatesFromHIP, totalHIP, highestHIP);
 }
 
 function processNgcNames(contents: string): void {
@@ -508,7 +486,7 @@ function processNgcNames(contents: string): void {
     }
   }
 
-  console.log(namedNSOs);
+  console.log(`Named non-stellar objects to seek in ngc2000.dat: ${namedNSOs}`);
 }
 
 function processNgcData(contents: string): void {
@@ -573,10 +551,6 @@ async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
 
   const file = new BinaryFile('output/stars.dat', 'w');
   let gapSize = 0;
-  let missingFK5 = 0;
-  let total = 0;
-  let bMag = 999.9;
-  let dMag = -999.9;
   let compressedMag: number;
 
   await file.open();
@@ -660,7 +634,16 @@ async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
   }
 
   await file.close();
-  console.log('total:', total, missingFK5);
+}
+
+function summary(): void {
+  console.log(`-- Total number of objects: ${total}`);
+  console.log(`FK5 stars: ${totalFK5} (updated from HIP: ${fk5UpdatesFromHIP}, highest: ${highestFK5}, missing: ${missingFK5})`);
+  console.log(`BSC stars: ${totalBSC} (updated from HIP: ${bscUpdatesFromHIP})`);
+  console.log(`HIP stars: ${totalHIP}`);
+  console.log(`DSOs     : ${totalDSO}`);
+  console.log(`Brightest magnitude: ${bMag}`);
+  console.log(`Dimmest magnitude  : ${dMag}`);
 }
 
 (async (): Promise<void> => {
@@ -691,6 +674,7 @@ async function writeStarCatalog(doDoublePrecision = false): Promise<void> {
     processNgcData(ngcData);
 
     await writeStarCatalog();
+    summary();
   }
   catch (err) {
     console.error(err);
