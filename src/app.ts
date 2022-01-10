@@ -130,6 +130,7 @@ let missingFK5 = 0;
 let bMag = 999.9;
 let dMag = -999.9;
 let pleiades: StarInfo;
+const bsc2fk5: CrossIndex = {};
 const ngcs: Record<number, NGCMatchInfo> = {};
 
 function processCrossIndex(contents: string): void {
@@ -221,7 +222,6 @@ function processCrossIndex(contents: string): void {
 
 function processYaleBrightStarCatalog(contents: string): void {
   const lines = asLines(contents);
-  const bsc2fk5: CrossIndex = {};
   let dupes = 0;
   let lastBSC = -1;
   let currBSC: number;
@@ -356,6 +356,35 @@ function processYaleBrightStarCatalog(contents: string): void {
       }
     }
   }
+}
+
+function processYaleBrightStarCatalogNotes(contents: string): void {
+  const lines = asLines(contents);
+  let nameCount = 0;
+
+  for (const line of lines) {
+    if (!line.trim())
+      continue;
+
+    const bscNum = toNumber(line.substring(1, 5));
+
+    if (bsc2fk5[bscNum] === 0)
+      continue;
+
+    const code = line.substring(5, 11).trim();
+
+    if (code !== '1N:')
+      continue;
+
+    const name = (/^([A-Z][A-Z ]+)[.;]/.exec(line.substring(12)) ?? [])[1];
+
+    if (name) {
+      ++nameCount;
+      fk5Index[bsc2fk5[bscNum]].name = toMixedCase(name);
+    }
+  }
+
+  console.log(`Full star names found: ${nameCount}`);
 }
 
 function processHipparcosStarCatalog(contents: string): void {
@@ -654,9 +683,9 @@ function summary(): void {
 
     const bscCatalog = await getPossiblyCachedFile(YALE_BSC_FILE, YALE_BSC_URL, 'Yale Bright Star Catalog');
     const bscNotes = await getPossiblyCachedFile(YALE_BSC_NOTES_FILE, YALE_BSC_NOTES_URL, 'Yale Bright Star Notes');
-    console.log(bscNotes.length);
 
     processYaleBrightStarCatalog(bscCatalog);
+    processYaleBrightStarCatalogNotes(bscNotes);
 
     const hipparcosData = await getPossiblyCachedFile(HIPPARCOS_FILE, HIPPARCOS_URL, 'Hipparcos data',
       { maxCacheAge: THREE_MONTHS, params: HIPPARCOS_PARAMS, autoDecompress: false });
