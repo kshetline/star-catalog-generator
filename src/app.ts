@@ -30,8 +30,18 @@ const HIPPARCOS_URL = 'https://heasarc.gsfc.nasa.gov/db-perl/W3Browse/w3query.pl
 const HIPPARCOS_FILE = 'cache/hipparcos.txt';
 const MAG_LIMIT_HIPPARCOS_QUERY = 7.0;
 /* cspell:disable */ // noinspection SpellCheckingInspection
-const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag&' +
-  'bparam_vmag=%3C%3D' + MAG_LIMIT_HIPPARCOS_QUERY + '&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+const HIPPARCOS_PARAMS = 'tablehead=name%3Dheasarc_hipparcos%26description%3DHipparcos+Main+Catalog' +
+  '%26url%3Dhttps%3A%2F%2Fheasarc.gsfc.nasa.gov%2FW3Browse%2Fstar-catalog%2Fhipparcos.html%26archive%3DN%26radius%3D1' +
+  '%26mission%3DSTAR+CATALOG%26priority%3D3%26tabletype%3DObject' +
+  '&sortvar=vmag&varon=pm_ra&bparam_pm_ra=&bparam_pm_ra%3A%3Aunit=mas%2Fyr&bparam_pm_ra%3A%3Aformat=float8%3A8.2f&varon=pm_dec' +
+  '&bparam_pm_dec=&bparam_pm_dec%3A%3Aunit=mas%2Fyr&bparam_pm_dec%3A%3Aformat=float8%3A8.2f&varon=hip_number&bparam_hip_number=' +
+  '&bparam_hip_number%3A%3Aformat=int4%3A6d&varon=vmag' +
+  '&bparam_vmag=%3C%3D' + MAG_LIMIT_HIPPARCOS_QUERY + '&bparam_vmag%3A%3Aunit=mag&bparam_vmag%3A%3Aformat=float8%3A5.2f' +
+  '&bparam_vmag_source=&bparam_vmag_source%3A%3Aformat=char1&varon=ra_deg&bparam_ra_deg=&bparam_ra_deg%3A%3Aunit=degree' +
+  '&bparam_ra_deg%3A%3Aformat=char12&varon=dec_deg&bparam_dec_deg=&bparam_dec_deg%3A%3Aunit=degree&bparam_dec_deg%3A%3Aformat=char12' +
+  '&varon=hd_id&bparam_hd_id=&bparam_hd_id%3A%3Aformat=int4%3A6d&Entry=&Coordinates=J2000&Radius=Default&Radius_unit=arcsec' +
+  '&NR=CheckCaches%2FGRB%2FSIMBAD%2BSesame%2FNED&Time=&ResultMax=0&displaymode=PureTextDisplay&Action=Start+Search&table=heasarc_hipparcos';
+/* cspell:enable */
 
 const NGC_NAMES_URL = 'https://cdsarc.cds.unistra.fr/viz-bin/nph-Cat/txt.gz?VII/118/names.dat';
 const NGC_NAMES_FILE = 'cache/ngc_names.txt';
