@@ -503,6 +503,9 @@ function processNgcNames(contents: string): void {
 
     let name = parts[0].trim();
 
+    if (name === 'Great Nebula in Andromeda')
+      name = 'Andromeda galaxy';
+
     if (name.startsWith('M ')) {
       messierNum = toNumber(name.substring(1));
       name = '';
