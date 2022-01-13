@@ -52,7 +52,7 @@ const NGC_DATA_FILE  = 'cache/ngc_2000_data.txt';
 const bscExtras = [8, 87, 340, 1643, 1751, 3732, 4030, 4067, 4531, 5223, 5473, 5714, 5888, 6970, 8076];
 
 const magLimitBSC = 6;
-const magLimitHipparcos = 6.5;
+const magLimitHipparcos = 6.25;
 
 const FK5_NAMES_TO_SKIP = /\d|(^[a-z][a-km-z]? )/;
 
@@ -318,7 +318,7 @@ function processYaleBrightStarCatalog(contents: string): void {
     const bayerRank = bayerRanks.indexOf(bayerRankStr) + 1;
 
     if ((vmag <= magLimitBSC || bscExtras.includes(bscNum) || (bayerRank > 0 &&
-         ((bayerRank < 12 && vmag <= 5.5) || (bayerRank < 6 && vmag <= 6.0)))) &&
+         ((bayerRank < 14 && vmag <= 6) || (bayerRank < 8 && vmag <= 6.5)))) &&
         (fk5Num === 0 || fk5Num > highestFK5 || !fk5Index[fk5Num])) {
       ++addedStars;
       fk5Num = highestFK5 + addedStars;
